@@ -1,6 +1,6 @@
 .selected {
   position: relative;
-  
+  color:FF000000;
   font-weight: bold;
   border: 2px solid FF0000;
   border-radius: 8px;
