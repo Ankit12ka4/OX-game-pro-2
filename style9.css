@@ -1,0 +1,231 @@
+document.addEventListener("DOMContentLoaded", () => {
+  let board = [];
+  let currentPlayer = "X"; // Human always starts
+  let gameOver = false;
+  let boardSize = localStorage.getItem("selectedBoardSize")
+    ? parseInt(localStorage.getItem("selectedBoardSize"))
+    : 3;
+  let aiLevel = localStorage.getItem("selectedGameLevel") || "Easy";
+
+  const boardElement = document.querySelector(".game-board");
+  const resultLabel = document.querySelector(".game-result");
+  const turnIndicator = document.querySelector(".turn-indicator");
+  const winnerLabel = document.querySelector(".winner-label");
+
+  applySavedAILevel();
+  createBoard(boardSize);
+
+  function applySavedAILevel() {
+    const savedLevel = localStorage.getItem("selectedGameLevel");
+    if (savedLevel) updateAIEmoji(savedLevel);
+  }
+
+  function updateAIEmoji(level) {
+    const aiEmoji = document.querySelector(".ai-emoji");
+    const primary = aiEmoji?.querySelector(".emoji.primary");
+    const backup = aiEmoji?.querySelector(".emoji.backup");
+    const label = aiEmoji?.querySelector(".emoji-name");
+
+    const emojiMap = {
+      Easy: ["🤖", "💻"],
+      Medium: ["🔰", "💡"],
+      Hard: ["⚙️", "⛭"],
+      God: ["👽", "★"],
+    };
+
+    if (emojiMap[level]) {
+      if (primary) primary.textContent = emojiMap[level][0];
+      if (backup) backup.textContent = emojiMap[level][1];
+      if (label) label.textContent = level;
+    }
+  }
+
+  function createBoard(size) {
+    boardElement.innerHTML = "";
+    boardElement.style.gridTemplateColumns = `repeat(${size}, 1fr)`;
+    boardElement.style.gridTemplateRows = `repeat(${size}, 1fr)`;
+    board = Array(size * size).fill("");
+    gameOver = false;
+    currentPlayer = "X";
+    turnIndicator.textContent = "Your Turn";
+    winnerLabel.textContent = "";
+    resultLabel.textContent = "";
+
+    for (let i = 0; i < size * size; i++) {
+      const cell = document.createElement("div");
+      cell.classList.add("cell");
+      cell.dataset.index = i;
+      cell.addEventListener("click", handleCellClick);
+      boardElement.appendChild(cell);
+    }
+  }
+
+  function handleCellClick(e) {
+    if (gameOver || currentPlayer !== "X") return;
+
+    const index = parseInt(e.target.dataset.index);
+    if (board[index] !== "") return;
+
+    makeMove(index, "X");
+
+    if (!gameOver) {
+      currentPlayer = "O";
+      turnIndicator.textContent = "AI Thinking...";
+      setTimeout(() => {
+        aiMove();
+      }, 500);
+    }
+  }
+
+  function makeMove(index, player) {
+    board[index] = player;
+    document.querySelector(`.cell[data-index="${index}"]`).textContent = player;
+
+    if (checkWinner(player)) {
+      drawWinningLine(player);
+      winnerLabel.textContent = player === "X" ? "You Won!" : "AI Won!";
+      resultLabel.textContent = player === "X" ? "Once More" : "Try Again";
+      gameOver = true;
+    } else if (board.every(cell => cell !== "")) {
+      resultLabel.textContent = "Draw! Try again.";
+      winnerLabel.textContent = "";
+      gameOver = true;
+    }
+  }
+
+  function aiMove() {
+    if (gameOver) return;
+
+    let index;
+    if (aiLevel === "Easy") {
+      index = getRandomMove();
+    } else if (aiLevel === "Medium") {
+      index = Math.random() < 0.5 ? getRandomMove() : getBestMove("O", false);
+    } else if (aiLevel === "Hard") {
+      index = getBestMove("O", false);
+    } else if (aiLevel === "God") {
+      index = getBestMove("O", true);
+    }
+
+    if (index !== undefined) {
+      makeMove(index, "O");
+      if (!gameOver) {
+        currentPlayer = "X";
+        turnIndicator.textContent = "Your Turn";
+      }
+    }
+  }
+
+  function getRandomMove() {
+    const empty = board.map((val, idx) => val === "" ? idx : null).filter(v => v !== null);
+    return empty[Math.floor(Math.random() * empty.length)];
+  }
+
+  function getBestMove(player, useAlphaBeta) {
+    let bestScore = -Infinity;
+    let move;
+
+    for (let i = 0; i < board.length; i++) {
+      if (board[i] === "") {
+        board[i] = player;
+        let score = useAlphaBeta
+          ? minimax(board, 0, false, -Infinity, Infinity)
+          : minimax(board, 0, false);
+        board[i] = "";
+        if (score > bestScore) {
+          bestScore = score;
+          move = i;
+        }
+      }
+    }
+    return move;
+  }
+
+  function minimax(newBoard, depth, isMax, alpha = null, beta = null) {
+    const scores = { X: -10, O: 10, draw: 0 };
+    const winner = evaluateWinner();
+    if (winner) return scores[winner];
+
+    if (isMax) {
+      let best = -Infinity;
+      for (let i = 0; i < newBoard.length; i++) {
+        if (newBoard[i] === "") {
+          newBoard[i] = "O";
+          let val = minimax(newBoard, depth + 1, false, alpha, beta);
+          newBoard[i] = "";
+          best = Math.max(best, val);
+          if (alpha !== null) alpha = Math.max(alpha, val);
+          if (beta !== null && beta <= alpha) break;
+        }
+      }
+      return best;
+    } else {
+      let best = Infinity;
+      for (let i = 0; i < newBoard.length; i++) {
+        if (newBoard[i] === "") {
+          newBoard[i] = "X";
+          let val = minimax(newBoard, depth + 1, true, alpha, beta);
+          newBoard[i] = "";
+          best = Math.min(best, val);
+          if (beta !== null) beta = Math.min(beta, val);
+          if (alpha !== null && beta <= alpha) break;
+        }
+      }
+      return best;
+    }
+  }
+
+  function evaluateWinner() {
+    const winner = checkWinner("X") ? "X" : checkWinner("O") ? "O" : null;
+    if (winner) return winner;
+    if (board.every(cell => cell !== "")) return "draw";
+    return null;
+  }
+
+  function checkWinner(player) {
+    const lines = [];
+
+    // Rows & Columns
+    for (let i = 0; i < boardSize; i++) {
+      lines.push([...Array(boardSize)].map((_, j) => i * boardSize + j)); // row
+      lines.push([...Array(boardSize)].map((_, j) => j * boardSize + i)); // col
+    }
+
+    // Diagonals
+    lines.push([...Array(boardSize)].map((_, i) => i * boardSize + i));
+    lines.push([...Array(boardSize)].map((_, i) => i * boardSize + (boardSize - 1 - i)));
+
+    for (const line of lines) {
+      if (line.every(i => board[i] === player)) {
+        winningLine = line;
+        return true;
+      }
+    }
+    return false;
+  }
+
+  let winningLine = [];
+
+  function drawWinningLine(player) {
+    winningLine.forEach(i => {
+      const cell = document.querySelector(`.cell[data-index="${i}"]`);
+      cell.classList.add("win-line");
+    });
+  }
+
+  // Restart on clicking result message
+  resultLabel.addEventListener("click", () => {
+    createBoard(boardSize);
+  });
+
+  // AI level select from dropdown
+  document.querySelectorAll(".ai-options .level").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const level = btn.textContent.trim();
+      localStorage.setItem("selectedGameLevel", level);
+      aiLevel = level;
+      updateAIEmoji(level);
+      document.querySelector(".ai-options").classList.add("hidden");
+    });
+  });
+});
