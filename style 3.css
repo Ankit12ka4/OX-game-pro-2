@@ -1,9 +1,8 @@
 .selected {
   position: relative;
-  background-color: white;
-  color: black;
+  
   font-weight: bold;
-  border: 2px solid #FF0000;
+  border: 2px solid FF000000;
   border-radius: 8px;
   z-index: 1;
   overflow: hidden;
